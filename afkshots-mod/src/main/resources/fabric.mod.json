@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "afkshots",
+  "version": "${version}",
+  "name": "AFK Shots",
+  "description": "A lightweight client-side AFK cinematic system with automatic camera shots, vanilla music and a full settings GUI.",
+  "authors": ["Soulsensei"],
+  "contact": {
+    "homepage": "https://modrinth.com/user/soulsensei"
+  },
+  "license": "All-Rights-Reserved",
+  "icon": "assets/afkshots/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.thesoulsensei.afkshots.AfkShotsClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.9",
+    "minecraft": ">=1.21.4 <=1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
