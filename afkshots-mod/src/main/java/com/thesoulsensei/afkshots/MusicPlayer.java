@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 
@@ -14,31 +15,22 @@ import java.util.Optional;
 import java.util.Random;
 
 /**
- * Plays one of vanilla Minecraft's own built-in music tracks while the
- * cinematic is active. No audio is bundled with this mod -- it only
- * triggers playback of music that already ships inside the base game,
- * exactly like the main menu or a jukebox does. That means there's
- * effectively no extra CPU/RAM cost beyond what the vanilla sound
- * engine already spends playing one track, so it should be fine even
- * on low-end/"trash" hardware -- it isn't decoding, mixing, or
- * streaming anything extra of its own.
+ * Handles optional vanilla Minecraft music during AFK cinematic shots.
  *
- * Tracks are looked up by their vanilla resource-ID string (e.g.
- * "minecraft:music.overworld.forest") instead of by Java field name.
- * Resource IDs are far more stable across versions than the constant
- * names in the SoundEvents class, and any ID that doesn't exist on a
- * given Minecraft version is silently skipped in favor of the next
- * candidate, so a missing track can't crash the mod -- worst case it
- * just plays no music that session.
+ * No audio files are bundled with the mod.
+ * The mod only uses sounds already provided by Minecraft.
  *
- * NOTE: PositionedSoundInstance.master(SoundEvent, float) is the
- * signature used across most recent versions. A small number of
- * releases wrap SoundEvent in RegistryEntry<SoundEvent> for this call
- * instead -- if this fails to compile on the version you target,
- * that's the one line/type to adjust.
+ * If a sound ID is unavailable on the current Minecraft version,
+ * it is skipped safely instead of causing a crash.
  */
 public class MusicPlayer {
 
+    /*
+     * Vanilla music candidates.
+     *
+     * The list is shuffled every time a cinematic starts so the
+     * same track is not always selected first.
+     */
     private static final List<Identifier> CANDIDATE_TRACKS = List.of(
             Identifier.of("minecraft", "music.overworld.forest"),
             Identifier.of("minecraft", "music.overworld.meadow"),
@@ -53,40 +45,85 @@ public class MusicPlayer {
     );
 
     private final Random random = new Random();
+
     private SoundInstance currentInstance;
+
     private boolean enabled = true;
 
+    /**
+     * Enables or disables cinematic music.
+     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
 
+    /**
+     * Returns whether cinematic music is enabled.
+     */
     public boolean isEnabled() {
         return enabled;
     }
 
+    /**
+     * Starts a random available vanilla music track.
+     *
+     * If music is disabled or a track is already playing,
+     * nothing happens.
+     */
     public void start(MinecraftClient client) {
         if (!enabled || currentInstance != null) {
             return;
         }
 
-        List<Identifier> shuffled = new ArrayList<>(CANDIDATE_TRACKS);
-        Collections.shuffle(shuffled, random);
+        List<Identifier> shuffledTracks = new ArrayList<>(CANDIDATE_TRACKS);
+        Collections.shuffle(shuffledTracks, random);
 
-        for (Identifier id : shuffled) {
-            Optional<SoundEvent> sound = Registries.SOUND_EVENT.getOrEmpty(id);
+        for (Identifier id : shuffledTracks) {
+
+            /*
+             * Minecraft 1.21.4:
+             * Registry#getEntry(Identifier) returns
+             * Optional<RegistryEntry.Reference<SoundEvent>>.
+             */
+            Optional<RegistryEntry.Reference<SoundEvent>> sound =
+                    Registries.SOUND_EVENT.getEntry(id);
+
             if (sound.isPresent()) {
-                currentInstance = PositionedSoundInstance.master(sound.get(), 1.0f);
+
+                /*
+                 * 1.21.4 supports the RegistryEntry version
+                 * of PositionedSoundInstance.master().
+                 */
+                currentInstance = PositionedSoundInstance.master(
+                        sound.get(),
+                        1.0f
+                );
+
                 client.getSoundManager().play(currentInstance);
                 return;
             }
         }
-        // None of the candidate track IDs exist on this version -- skip music, no crash.
+
+        /*
+         * None of the candidate tracks exist on this version.
+         * Simply continue without music.
+         */
     }
 
+    /**
+     * Stops the currently playing cinematic music.
+     */
     public void stop(MinecraftClient client) {
         if (currentInstance != null) {
             client.getSoundManager().stop(currentInstance);
             currentInstance = null;
         }
+    }
+
+    /**
+     * Stops the current track and clears the instance.
+     */
+    public void reset(MinecraftClient client) {
+        stop(client);
     }
 }
